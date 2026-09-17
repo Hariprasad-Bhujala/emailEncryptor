@@ -1,0 +1,705 @@
+account-profile.js
+-------------------------------------------
+const $updateAccountForm = $("#hcp-myUserInfo").find('form');
+const $updateAccFormSubmitBtn = $("#hcp-myUserInfo").find("button");
+let formattedData;
+$updateAccFormSubmitBtn.on('click', function(e) {
+  e.preventDefault();
+    e.stopImmediatePropagation();
+
+    showLoadingSpinner();
+    const URL = $updateAccountForm.attr("action");
+    const lang = $("input[name='x-preferred-language']").val();
+    const countryCd = $("input[name='x-country-code']").val();
+    const applicationId = $("input[name='x-application-id']").val();
+    const formData = $updateAccountForm.serializeArray();
+
+    const dataObj = {};
+    const headerObj = {
+    "x-preferred-language": lang,
+    "x-country-code": countryCd,
+    "x-application-id": applicationId,
+    "x-id-token": getItemLocalStorage("cJwtExt", true) ?? getItemLocalStorage("cJwt", true)
+  };
+
+    $.each(formData, function(_, field) {
+      dataObj[field.name] = field.value;
+    });
+
+    $("ul.a-dropdown__menu").each(function() {
+        const $dropdown = $(this);
+        const selectedLi = $dropdown.find("li.selected");
+        const name = $dropdown.attr("name");
+
+        if(selectedLi.length && name) {
+            const value = selectedLi.data('optionvalue');
+            dataObj[name] = value;
+        }
+    });
+
+    formattedData = {
+        "userInfo": dataObj,
+    "consents": [
+            {
+                "IsReceivingCommunication": "No",
+                "AcceptTermsOfUse":  "Yes"
+            }
+        ] 
+    };
+
+    $.ajax({
+      url: URL,
+        type: "PATCH",
+        contentType: "application/json",
+        data: JSON.stringify(formattedData),
+        headers: headerObj,
+        success: onSuccessHcpAccountProfile,
+        error: onErrorHcpAccountProfile
+    });
+});
+function onSuccessHcpAccountProfile(data) {
+    if(data?.errorCode === 0) {
+        let sessionDuration = $('[name*="session-duration-minutes"]').length ? Number($('[name*="session-duration-minutes"]').val()) : 50;
+        let userData = usObj && decryptData(usObj, pk, 'object');
+        let tempUsObj;
+        userData ={
+            ...userData,
+            firstName: formattedData?.userInfo?.firstName ?? userData?.firstName,
+            lastName: formattedData?.userInfo?.lastName ?? userData?.lastName,
+            address: formattedData?.userInfo?.address ??  "",
+            city: formattedData?.userInfo?.city ??  "",
+            state: formattedData?.userInfo?.state ??  "",
+            zip: formattedData?.userInfo?.zip ??  ""
+        };
+        if(userData?.firstName) {
+            tempUsObj = encryptData(userData);
+            let usFn1 = userData?.firstName?.charAt(0).toUpperCase() ?? usFn;
+            updateConst(tempUsObj,usFn1);
+            usFn && setItemLocalStorage('usFn', usFn1, true, sessionDuration);
+            setItemLocalStorage('usObj', tempUsObj, true, sessionDuration);
+            $('.user-circle-icon').text(usFn1);
+        }
+        const successCode =  String('SCode-1');
+        const isCustomMessage = successCode ?  getHiddenValue(successCode) ?? '' : '';
+        $('.o-form-container__success-msg').text('');
+        $('.o-form-container__success-msg').text(isCustomMessage ?? data?.response?.statusReason);
+        const id =  $('.o-form-container__success-msg').closest('[id]').find('.btn').attr('id');
+        id && scrollToSection('#'+id);
+        hideLoadingSpinner();
+    } else {
+        onErrorHcpAccountProfile(data);
+    }
+}
+
+function onErrorHcpAccountProfile(error) {
+    const errorCode =  String(error?.response?.i18nMessageKey || error?.errorCode);
+    const isCustomMessage = errorCode ?  getHiddenValue(errorCode) || error?.response?.statusReason : '';
+    $('.o-form-container__error-msg').text('');
+    isCustomMessage && $('.o-form-container__error-msg').text(isCustomMessage);
+    const id =  $('.o-form-container__error-msg').closest('[id]').find('.btn').attr('id');
+    id && scrollToSection('#'+id);
+    hideLoadingSpinner();
+}
+email-verification.js
+-----------------------------------------
+/**
+* @function
+* Summary: Called before login verify request, to update the payload.
+* Parameters: data {Object} initial payload generated from form-container.
+*/
+function updateRequestHcpSignUpVerify(data) {
+    showLoadingSpinner();
+    delete data.body['requestType'];
+    delete data.body['node'];
+    delete data.body['g-recaptcha-response'];
+    data.headers["x-verification-token"] = getQueryParamByName('activationKey');
+
+    return data;
+  }
+
+  /**
+   * @function
+   * Summary: Called on successful login verify to process response.
+   * Parameters: data {Object} is the API response.
+   */
+  function onSuccessHcpSignUpVerify(data) {
+    if (data.errorCode === 0) {
+      let waitTime = +document.querySelector("input[name='hcp-verify__waitTime']")?.dataset.keyName || 4000;
+      let loginUrl = document.querySelector(".sign-in-hcp > a")?.getAttribute("href");
+      hideLoadingSpinner();
+      $('#hcp-login_verify_success').css('display', 'block');
+      scrollToSection('#hcp-login_verify_success');
+      setTimeout(() => {
+        location.href = loginUrl;
+      }, waitTime);
+    } else {
+      onErrorHcpSignUpVerify(data);
+    }
+  }
+
+  /**
+   * @function
+   * Summary: Called on error response of login verify.
+   * Parameters: error {Object} is the API response.
+   */
+  function onErrorHcpSignUpVerify(error) {
+    hideLoadingSpinner();
+    $('#hcp-login_verify_error').css('display', 'block');
+    scrollToSection('#hcp-login_verify_error');
+  }
+extend-session-form.js
+----------------------------------------------
+/**
+* @function
+* Summary: Called before login verify request, to update the payload.
+* Parameters: data {Object} initial payload generated from form-container.
+*/
+function updateRequestHcpSignUpVerify(data) {
+    showLoadingSpinner();
+    delete data.body['requestType'];
+    delete data.body['node'];
+    delete data.body['g-recaptcha-response'];
+    data.headers["x-verification-token"] = getQueryParamByName('activationKey');
+
+    return data;
+  }
+
+  /**
+   * @function
+   * Summary: Called on successful login verify to process response.
+   * Parameters: data {Object} is the API response.
+   */
+  function onSuccessHcpSignUpVerify(data) {
+    if (data.errorCode === 0) {
+      let waitTime = +document.querySelector("input[name='hcp-verify__waitTime']")?.dataset.keyName || 4000;
+      let loginUrl = document.querySelector(".sign-in-hcp > a")?.getAttribute("href");
+      hideLoadingSpinner();
+      $('#hcp-login_verify_success').css('display', 'block');
+      scrollToSection('#hcp-login_verify_success');
+      setTimeout(() => {
+        location.href = loginUrl;
+      }, waitTime);
+    } else {
+      onErrorHcpSignUpVerify(data);
+    }
+  }
+
+  /**
+   * @function
+   * Summary: Called on error response of login verify.
+   * Parameters: error {Object} is the API response.
+   */
+  function onErrorHcpSignUpVerify(error) {
+    hideLoadingSpinner();
+    $('#hcp-login_verify_error').css('display', 'block');
+    scrollToSection('#hcp-login_verify_error');
+  }
+forgot-reset-password.js
+----------------------------------------------------------
+/**
+* @function
+* Summary: Called before forgot/reset password, to update the request payload.
+* Parameters: data {Object} initial payload generated from form-container.
+*/
+function updateRequestHcpPassword(data) {
+    delete data.body['requestType'];
+    delete data.body['node'];
+
+    let reCaptchaKey = $('[name="reCaptchaAPIKey"]').val();
+    let captchaValue = data.body["g-recaptcha-response"];
+
+    if (captchaValue === "") {
+        data.headers["x-secret-header"] = reCaptchaKey;
+    } else {
+        data.body["g-recaptcha-response"] = captchaValue;
+        let enterpriseRecaptcha = document.querySelector('input[name="enterpriseRecaptcha"]')?.value
+        if (enterpriseRecaptcha === "true") {
+            data.body["captchaType"] = "ENT";
+            data.body["captchaAction"] = "submit";
+        }
+    }
+
+    return data;
+}
+
+/**
+* @function
+* Summary: Called on successful forgot password to process response. 
+* Parameters: data {Object} is the API response.
+*/
+function onSuccessHcpPassword(data) {
+    if (data.errorCode === 0) {
+        $('.hcp_forgot-password-form').hide();
+        $('.hcp_forgot-confirmation').removeClass('d-none');
+        scrollToSection('.hcp_forgot-confirmation');
+    } else {
+        onErrorHcpPassword(data);
+    }
+}
+
+/**
+* @function
+* Summary: Called on error response of password forgot/reset. 
+* Parameters: error {Object} is the API response.
+*/
+function onErrorHcpPassword(error) {
+    $('.o-form-container__error-msg').text('');
+    const errorCode =  String(error?.response?.i18nMessageKey || error?.errorCode);
+    const isCustomMessage = errorCode ?  getHiddenValue(errorCode) || error?.response?.statusReason : '';
+    if(isCustomMessage) {
+        $('.o-form-container__error-msg').text(isCustomMessage);
+    } else {
+        showHideApiError(error);
+    }
+}
+
+/**
+* @function
+* Summary: Called before change password, to update the request payload.
+* Parameters: data {Object} initial payload generated from form-container.
+*/
+function updateRequestHcpChangePassword(data) {
+    delete data.body['requestType'];
+    delete data.body['node'];
+    $("#myfreestyle-reset-password .o-form-container__error-msg").text('');
+    let reCaptchaKey = $('[name="reCaptchaAPIKey"]').val();
+    let captchaValue = data.body["g-recaptcha-response"];
+
+    if(data.body['password']  !== data.body['confirmPassword']) {
+        const errorCode =  String('FP-1');
+        const isCustomMessage = errorCode ?  getHiddenValue(errorCode)  : '';
+        $("#myfreestyle-reset-password .o-form-container__error-msg").text(isCustomMessage);
+        const id =  $('#myfreestyle-reset-password').find('.btn').attr('id');
+        id && scrollToSection('#'+id);
+        return false;
+    }
+    data.body["resetToken"] = getUrlParameter('resetToken');
+
+    if (captchaValue === "") {
+        data.headers["x-secret-header"] = reCaptchaKey;
+    } else {
+        data.body["g-recaptcha-response"] = captchaValue;
+        let enterpriseRecaptcha = document.querySelector('input[name="enterpriseRecaptcha"]')?.value
+        if (enterpriseRecaptcha === "true") {
+            data.body["captchaType"] = "ENT";
+            data.body["captchaAction"] = "submit";
+        }
+    }
+
+    return data;
+}
+
+/**
+* @function
+* Summary: Called on successful password changed to process response. 
+* Parameters: data {Object} is the API response.
+*/
+function onSuccessHcpChangePassword(data) {
+    if (data.errorCode === 0) {
+        $('.hcp_change-password-form').hide();
+        $('.hcp_change-confirmation').removeClass('d-none');
+        scrollToSection('.hcp_change-confirmation');
+    } else {
+        onErrorHcpPassword(data);
+    }
+}
+logout-fn.js
+-----------------------------------------------------
+
+function updateRequestMyFreestyleUserLogout(data) {
+    showLoadingSpinner();
+    delete data.body['requestType'];
+    delete data.body['node'];
+    data.headers["x-id-token"] = getItemLocalStorage("cJwtExt", true) ?? getItemLocalStorage("cJwt", true);
+    let captchaValue = data.body["g-recaptcha-response"];
+    let reCaptchaKey = $('[name="reCaptchaAPIKey"]').val();
+    if(!data.headers["x-id-token"]){
+       removeEvntLstnr();
+        const currentPath = globalThis.location.pathname;
+        if (currentPath.includes('/secure/')) {
+           return addNavigation('#myfreestyleLoginPage');
+         } 
+         return reloadPage();
+     }
+     let formattedData = {
+          refresh_token:  getItemLocalStorage('refreshToken',  true),
+    }
+   if (captchaValue === "") {
+      data.headers["x-secret-header"] = reCaptchaKey;
+   } else {
+      formattedData["g-recaptcha-response"] = captchaValue;
+      let enterpriseRecaptcha = document.querySelector('input[name="enterpriseRecaptcha"]')?.value
+      if (enterpriseRecaptcha === "true") {
+        formattedData["captchaType"] = "ENT";
+        formattedData["captchaAction"] = "submit";
+      }
+   }
+    data.body = formattedData;
+    return data;
+}
+
+function onSuccessMyFreestyleUserLogout(data) {
+    let jwt = getItemLocalStorage("cJwtExt", true) ?? getItemLocalStorage("cJwt", true);
+    if (data.errorCode === 0) {
+      removeEvntLstnr();
+      showhideModal('btnModalExtendSession', 0);
+      clearUserStorage();
+      updateSessionCookie(jwt, false);
+     fireEvent( 'successful_logout', 'logout-form');
+    } else {
+      onErrorMyFreestyleCommon(data);
+    }
+}
+signin.js
+-------------------------------------------------------
+document.addEventListener("DOMContentLoaded", initAutoLogin);
+async function initAutoLogin() {
+  const shouldRedirect = sessionStorage.getItem("redirect") === "true";
+  const encData = sessionStorage.getItem("encUserData");
+  if (!shouldRedirect || !encData) return;
+
+  try {
+    const { username, password } = JSON.parse(encData);
+    const { username: email, password: pass } = decryptStoredData(username, password);
+    const emailField = await waitForElement("#userName");
+    const passField = await waitForElement("#password");
+    const loginButton = await waitForElement("#login-btn");
+
+    await waitForRecaptcha();
+
+    emailField.value = email;
+    passField.value = pass;
+    loginButton.disabled = false;
+    loginButton.removeAttribute("disabled");
+
+    requestAnimationFrame(() => loginButton.click());
+  } catch (err) {
+    console.error("Autofill error:", err);
+  } finally {
+
+    sessionStorage.removeItem("redirect");
+    sessionStorage.removeItem("encUserData");
+  }
+}
+
+function waitForElement(selector) {
+  return new Promise(resolve => {
+    const check = () => {
+      const el = document.querySelector(selector);
+      if (el) return resolve(el);
+      requestAnimationFrame(check);
+    };
+    check();
+  });
+}
+
+function waitForRecaptcha(timeout = 1000) {
+  return new Promise(resolve => {
+    if (globalThis.grecaptcha?.render) {
+      return resolve();
+    }
+    const interval = setInterval(() => {
+      if (globalThis.grecaptcha?.render) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 50);
+    setTimeout(() => {
+      clearInterval(interval);
+      resolve(); // never block login
+    }, timeout);
+  });
+}
+
+
+function decryptStoredData(usn, pass) {
+  console.log("decrypting creds");
+  const secretKey = 'your-secret-key'; 
+  const decryptedEmail = CryptoJS.AES.decrypt(usn, secretKey).toString(CryptoJS.enc.Utf8);
+  const decryptedPassword = CryptoJS.AES.decrypt(pass, secretKey).toString(CryptoJS.enc.Utf8);
+
+  return {
+    username: decryptedEmail,
+    password: decryptedPassword
+  };
+}
+
+function updateSignInRequest(data) {
+    showLoadingSpinner();
+    delete data.body['requestType'];
+    delete data.body['node'];
+    let reCaptchaKey = $('[name="reCaptchaAPIKey"]').val();
+    let captchaValue = data.body["g-recaptcha-response"];
+    let formattedData = {
+          loginID: data.body.loginID,
+          password: data.body.password
+    }
+    if (captchaValue === "") {
+      data.headers["x-secret-header"] = reCaptchaKey;
+   } else {
+      formattedData["g-recaptcha-response"] = captchaValue;
+      let enterpriseRecaptcha = document.querySelector('input[name="enterpriseRecaptcha"]')?.value
+      if (enterpriseRecaptcha === "true") {
+        formattedData["captchaType"] = "ENT";
+        formattedData["captchaAction"] = "submit";
+      }
+   }
+    data.body = formattedData;
+    return data;
+  }
+
+async function onSuccessSignInUserLogin(data) {
+    try {
+       clearUserStorage();
+    if (data.errorCode !== 0) { 
+      return onErrorMyFreestyleUserLogin(data);
+    }
+
+    let jwtToken = data?.response?.accessToken;
+    if (jwtToken) { 
+        setItemLocalStorage('cJwt', jwtToken, true);
+        setItemLocalStorage('id.token', data?.response?.idToken, true);
+    }
+
+    let refreshToken = data?.response?.refreshToken;
+    if (refreshToken) { 
+        setItemLocalStorage('refreshToken', refreshToken, true);
+    }
+
+    let isEligibleForSample = false;
+
+    if (data?.response?.userInfo?.role === 'HCP') {
+      const responseApi = await fetchWebSamplingData(data?.response?.userInfo?.npi,'', data?.response?.userInfo?.email, '');
+      const {entityId, sampleEligibility} = responseApi.response
+      isEligibleForSample =  sampleEligibility;
+
+      if (isEligibleForSample && entityId ) {
+        data.response.userInfo['vid'] = entityId;
+        data.response.userInfo['viva-email-id'] = '';
+      }
+    }
+
+    if (data?.response?.userInfo?.email) {
+      setUsObjProvider(data.response);
+    }
+    sessionTimestamp(true);
+    updateSessionCookie(jwtToken, true, data?.response?.userInfo?.role);
+    } catch (error) {
+      console.error("onSuccessSignInUserLogin failed:", error);
+    }
+
+       fireEvent( 'successful_login', 'login-form');
+  }
+
+
+function fireEvent(eventName,formName){
+          globalThis?._satellite?.track(eventName,{'formName': formName,'formType': formName});
+  }
+
+  function onErrorMyFreestyleUserLogin(error) {
+    $('.o-form-container__error-msg').text('');
+    const errorCode =  String(error?.response?.i18nMessageKey || error?.errorCode);
+    const isCustomMessage = errorCode ?  getHiddenValue(errorCode) || error?.response?.statusReason : '';
+     clearUserStorage();
+    if(isCustomMessage){
+      $('.o-form-container__error-msg').text(isCustomMessage);
+      const id =  $('.o-form-container__error-msg').closest('[id]').find('.btn').attr('id');
+       id && scrollToSection('#'+id);
+    } else {
+      showHideApiError(error);
+    }
+  }
+
+  function onErrorMyFreestyleCommon(error) {
+    const errorCode =  String(error?.response?.i18nMessageKey || error?.errorCode);
+    const isCustomMessage = errorCode ?  getHiddenValue(errorCode) ?? error?.response?.statusReason : '';
+     hideLoadingSpinner();
+     $('.o-form-container__error-msg').text('');
+    if(isCustomMessage ){
+      $('.o-form-container__error-msg').text(isCustomMessage);
+       const id =  $('.o-form-container__error-msg').closest('[id]').find('.btn').attr('id');
+       id && scrollToSection('#'+id);
+    } else {
+      showHideApiError(error);
+    }
+  }
+signup.js
+------------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", initAutoLogin);
+async function initAutoLogin() {
+  const shouldRedirect = sessionStorage.getItem("redirect") === "true";
+  const encData = sessionStorage.getItem("encUserData");
+  if (!shouldRedirect || !encData) return;
+
+  try {
+    const { username, password } = JSON.parse(encData);
+    const { username: email, password: pass } = decryptStoredData(username, password);
+    const emailField = await waitForElement("#userName");
+    const passField = await waitForElement("#password");
+    const loginButton = await waitForElement("#login-btn");
+
+    await waitForRecaptcha();
+
+    emailField.value = email;
+    passField.value = pass;
+    loginButton.disabled = false;
+    loginButton.removeAttribute("disabled");
+
+    requestAnimationFrame(() => loginButton.click());
+  } catch (err) {
+    console.error("Autofill error:", err);
+  } finally {
+
+    sessionStorage.removeItem("redirect");
+    sessionStorage.removeItem("encUserData");
+  }
+}
+
+function waitForElement(selector) {
+  return new Promise(resolve => {
+    const check = () => {
+      const el = document.querySelector(selector);
+      if (el) return resolve(el);
+      requestAnimationFrame(check);
+    };
+    check();
+  });
+}
+
+function waitForRecaptcha(timeout = 1000) {
+  return new Promise(resolve => {
+    if (globalThis.grecaptcha?.render) {
+      return resolve();
+    }
+    const interval = setInterval(() => {
+      if (globalThis.grecaptcha?.render) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 50);
+    setTimeout(() => {
+      clearInterval(interval);
+      resolve(); // never block login
+    }, timeout);
+  });
+}
+
+
+function decryptStoredData(usn, pass) {
+  console.log("decrypting creds");
+  const secretKey = 'your-secret-key'; 
+  const decryptedEmail = CryptoJS.AES.decrypt(usn, secretKey).toString(CryptoJS.enc.Utf8);
+  const decryptedPassword = CryptoJS.AES.decrypt(pass, secretKey).toString(CryptoJS.enc.Utf8);
+
+  return {
+    username: decryptedEmail,
+    password: decryptedPassword
+  };
+}
+
+function updateSignInRequest(data) {
+    showLoadingSpinner();
+    delete data.body['requestType'];
+    delete data.body['node'];
+    let reCaptchaKey = $('[name="reCaptchaAPIKey"]').val();
+    let captchaValue = data.body["g-recaptcha-response"];
+    let formattedData = {
+          loginID: data.body.loginID,
+          password: data.body.password
+    }
+    if (captchaValue === "") {
+      data.headers["x-secret-header"] = reCaptchaKey;
+   } else {
+      formattedData["g-recaptcha-response"] = captchaValue;
+      let enterpriseRecaptcha = document.querySelector('input[name="enterpriseRecaptcha"]')?.value
+      if (enterpriseRecaptcha === "true") {
+        formattedData["captchaType"] = "ENT";
+        formattedData["captchaAction"] = "submit";
+      }
+   }
+    data.body = formattedData;
+    return data;
+  }
+
+async function onSuccessSignInUserLogin(data) {
+    try {
+       clearUserStorage();
+    if (data.errorCode !== 0) { 
+      return onErrorMyFreestyleUserLogin(data);
+    }
+
+    let jwtToken = data?.response?.accessToken;
+    if (jwtToken) { 
+        setItemLocalStorage('cJwt', jwtToken, true);
+        setItemLocalStorage('id.token', data?.response?.idToken, true);
+    }
+
+    let refreshToken = data?.response?.refreshToken;
+    if (refreshToken) { 
+        setItemLocalStorage('refreshToken', refreshToken, true);
+    }
+
+    let isEligibleForSample = false;
+
+    if (data?.response?.userInfo?.role === 'HCP') {
+      const responseApi = await fetchWebSamplingData(data?.response?.userInfo?.npi,'', data?.response?.userInfo?.email, '');
+      const {entityId, sampleEligibility} = responseApi.response
+      isEligibleForSample =  sampleEligibility;
+
+      if (isEligibleForSample && entityId ) {
+        data.response.userInfo['vid'] = entityId;
+        data.response.userInfo['viva-email-id'] = '';
+      }
+    }
+
+    if (data?.response?.userInfo?.email) {
+      setUsObjProvider(data.response);
+    }
+    sessionTimestamp(true);
+    updateSessionCookie(jwtToken, true, data?.response?.userInfo?.role);
+    } catch (error) {
+      console.error("onSuccessSignInUserLogin failed:", error);
+    }
+
+       fireEvent( 'successful_login', 'login-form');
+  }
+
+
+function fireEvent(eventName,formName){
+          globalThis?._satellite?.track(eventName,{'formName': formName,'formType': formName});
+  }
+
+  function onErrorMyFreestyleUserLogin(error) {
+    $('.o-form-container__error-msg').text('');
+    const errorCode =  String(error?.response?.i18nMessageKey || error?.errorCode);
+    const isCustomMessage = errorCode ?  getHiddenValue(errorCode) || error?.response?.statusReason : '';
+     clearUserStorage();
+    if(isCustomMessage){
+      $('.o-form-container__error-msg').text(isCustomMessage);
+      const id =  $('.o-form-container__error-msg').closest('[id]').find('.btn').attr('id');
+       id && scrollToSection('#'+id);
+    } else {
+      showHideApiError(error);
+    }
+  }
+
+  function onErrorMyFreestyleCommon(error) {
+    const errorCode =  String(error?.response?.i18nMessageKey || error?.errorCode);
+    const isCustomMessage = errorCode ?  getHiddenValue(errorCode) ?? error?.response?.statusReason : '';
+     hideLoadingSpinner();
+     $('.o-form-container__error-msg').text('');
+    if(isCustomMessage ){
+      $('.o-form-container__error-msg').text(isCustomMessage);
+       const id =  $('.o-form-container__error-msg').closest('[id]').find('.btn').attr('id');
+       id && scrollToSection('#'+id);
+    } else {
+      showHideApiError(error);
+    }
+  }
+
+
+
+
+
+
+ 
